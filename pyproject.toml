@@ -20,6 +20,9 @@ build-backend = "hatchling.build"
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[project.scripts]
+orca-init = "multi_agent_coding_system.orca_init.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.4.2",
