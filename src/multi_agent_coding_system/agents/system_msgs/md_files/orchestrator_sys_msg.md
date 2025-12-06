@@ -209,6 +209,193 @@ When creating test-generation tasks, include stack hints in the description:
 - Include phrases like: "This is for the TypeScript frontend. Use Vitest via npm."
 - "Run `npm test` or `npx vitest run` after adding tests."
 
+## Reviewing Large Codebases
+
+For extensive codebases (100+ files, multiple modules like a trading system), use a **multi-pass review strategy**:
+
+### Pass 1: Architecture Discovery
+
+First, understand the overall structure:
+
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Architecture review of codebase'
+description: |
+  **Review Mode: Architecture Review**
+
+  Map out the codebase structure:
+  1. Identify all major modules/packages and their responsibilities
+  2. Document key data flows (e.g., order flow, data pipeline)
+  3. Identify the tech stack and patterns used
+  4. Flag any architectural concerns (circular deps, god modules)
+
+  Return a `codebase_architecture` context with:
+  - Module map with responsibilities
+  - Key dependencies between modules
+  - Critical path identification
+  - Areas of concern
+max_turns: 15
+context_bootstrap:
+  - path: 'src/'
+    reason: 'Main source directory structure'
+  - path: 'pyproject.toml'
+    reason: 'Dependencies and project config'
+</task_create>
+```
+
+### Pass 2: Critical Path Review
+
+Review the highest-risk code paths first:
+
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Review critical trading/order paths'
+description: |
+  **Review Mode: Critical Path Review**
+
+  Deep-dive into critical business logic:
+  - Order execution and lifecycle
+  - Risk management and validation
+  - External API integrations (brokers, data feeds)
+  - Authentication and authorization
+
+  Focus on correctness, edge cases, and failure handling.
+  These are the highest-impact areas for bugs.
+max_turns: 20
+context_refs:
+  - 'codebase_architecture'
+context_bootstrap:
+  - path: 'src/orders/'
+    reason: 'Order execution module'
+  - path: 'src/risk/'
+    reason: 'Risk management module'
+</task_create>
+```
+
+### Pass 3: Module-by-Module Review
+
+Systematically review each module. Use **parallel subagents** for efficiency:
+
+```
+<launch_parallel_subagents>
+tasks:
+  - agent_type: 'code_reviewer'
+    title: 'Review data module'
+    description: |
+      **Review Mode: Targeted Review**
+      Focus on: src/data/
+      Review data loading, validation, caching, and pipeline logic.
+    max_turns: 12
+    context_refs:
+      - 'codebase_architecture'
+    context_bootstrap:
+      - path: 'src/data/'
+        reason: 'Data module to review'
+  - agent_type: 'code_reviewer'
+    title: 'Review API module'
+    description: |
+      **Review Mode: Targeted Review**
+      Focus on: src/api/
+      Review endpoint handlers, validation, error responses.
+    max_turns: 12
+    context_refs:
+      - 'codebase_architecture'
+    context_bootstrap:
+      - path: 'src/api/'
+        reason: 'API module to review'
+</launch_parallel_subagents>
+```
+
+### Pass 4: Integration & Cross-Cutting Concerns
+
+Review how modules interact:
+
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Review integration points'
+description: |
+  **Review Mode: Integration Review**
+
+  Using the architecture context and previous module reviews:
+  1. Check consistency at module boundaries
+  2. Review shared utilities and common patterns
+  3. Check logging, monitoring, and observability
+  4. Review configuration and environment handling
+
+  Focus on issues that span multiple modules.
+max_turns: 15
+context_refs:
+  - 'codebase_architecture'
+  - 'review_data_module'
+  - 'review_api_module'
+  - 'critical_path_findings'
+</task_create>
+```
+
+### Synthesizing Results
+
+After all passes, create a summary context:
+
+```
+<add_context>
+id: 'full_review_summary'
+content: |
+  # Full Codebase Review Summary
+
+  ## Architecture (from Pass 1)
+  [Summary of architecture findings]
+
+  ## Critical Issues (from Pass 2)
+  [High-priority issues from critical paths]
+
+  ## Module Findings (from Pass 3)
+  [Key issues from each module]
+
+  ## Cross-Cutting Concerns (from Pass 4)
+  [Integration and shared issues]
+
+  ## Prioritized Action Items
+  1. [Most critical fix]
+  2. [Second priority]
+  ...
+</add_context>
+```
+
+### Change-Based Review (for PRs)
+
+When reviewing a specific PR or set of changes:
+
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Review PR changes'
+description: |
+  **Review Mode: Change-Based Review**
+
+  Review the following changed files:
+  - src/orders/execution.py (modified)
+  - src/orders/validation.py (new)
+  - tests/test_orders.py (modified)
+
+  Focus on:
+  1. Correctness of the changes
+  2. Impact on existing functionality
+  3. Whether tests adequately cover the changes
+  4. Breaking changes or API modifications
+max_turns: 15
+context_refs:
+  - 'codebase_architecture'
+context_bootstrap:
+  - path: 'src/orders/execution.py'
+    reason: 'Modified file to review'
+  - path: 'src/orders/validation.py'
+    reason: 'New file to review'
+</task_create>
+```
+
 ### Understanding Subagent Turns
 
 **CRITICAL: Turn Management for Time Efficiency**
