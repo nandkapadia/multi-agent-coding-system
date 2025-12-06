@@ -122,7 +122,7 @@ class ViewAllNotesAction(Action):
 # Task Management Actions
 class TaskSpec(BaseModel):
     """Base task specification shared by single and parallel task creation."""
-    agent_type: Literal["explorer", "coder"]
+    agent_type: Literal["explorer", "coder", "code_reviewer", "test_writer"]
     title: str = Field(..., min_length=1)
     description: str = Field(..., min_length=1)
     max_turns: int = Field(8, gt=0, le=20)

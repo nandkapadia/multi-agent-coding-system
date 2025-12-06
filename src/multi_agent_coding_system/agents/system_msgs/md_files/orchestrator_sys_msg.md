@@ -120,7 +120,7 @@ context_bootstrap: list
 ```
 
 **Field descriptions:**
-- `agent_type`: Choose 'explorer' for explorational understanding and validation operations or 'coder' for implementation operations
+- `agent_type`: Choose from: 'explorer' (investigation/validation), 'coder' (implementation), 'code_reviewer' (read-only code review), or 'test_writer' (test generation)
 - `title`: A concise title for the task (max 7 words)
 - `description`: Detailed instructions for what the subagent should accomplish
 - `max_turns`: Number of turns the subagent has to complete the task (default: 8, max: 20). Each action like file read, bash command, or file write consumes one turn. Be strategic: simple tasks need fewer turns, complex multi-step tasks need more.
@@ -157,9 +157,57 @@ context_bootstrap:
 	- System inspection
 	- Verification of coder's work
 	- Can run programs with bash
-- `coder`: 
+- `coder`:
 	- File modifications
 	- System state changes
+- `code_reviewer`:
+	- **Read-only** deep code review specialist
+	- Identifies correctness bugs, security issues, performance problems
+	- Produces `review_summary`, `high_priority_issues`, `recommended_followups` contexts
+	- Cannot modify files - only analyze and report
+- `test_writer`:
+	- **Write-capable** test generation specialist
+	- Creates and modifies test files using pytest (Python) or Vitest (JS/TS)
+	- Produces `test_plan`, `test_files_modified`, `commands_run`, `results_summary`, `gaps_remaining` contexts
+	- Can write test files and run test commands
+
+## Recommended Workflow for Tasks Involving Code Changes
+
+For non-trivial implementations or bug fixes, prefer the following pattern:
+
+1. **Explore**: Use `explorer` to quickly understand relevant parts of the codebase.
+2. **Implement**: Use `coder` to implement the feature or bug fix.
+3. **Review**: Use `code_reviewer` to review the changes and identify:
+   - High-priority issues that need fixing
+   - Areas that need additional testing
+4. **Test**: Use `test_writer` to:
+   - Create or extend tests (pytest for Python, Vitest for JS/TS)
+   - Run the tests
+   - Report results and remaining gaps
+
+### Chaining Review to Tests
+
+After a Code Review task finishes, you should often:
+
+- Examine the `high_priority_issues` and `recommended_followups` contexts.
+- If missing tests or risky code paths are mentioned, create a `test_writer` task that:
+  - References these contexts via `context_refs`
+  - Asks for tests that cover the specific issues noted by the reviewer
+
+This ensures a virtuous cycle: **Coder -> Reviewer -> Tester -> (back to Coder if tests fail)**
+
+### Stack-Specific Task Hints
+
+When creating test-generation tasks, include stack hints in the description:
+
+**Python / pytest:**
+- Include phrases like: "This is for the Python backend. Use pytest."
+- "Add tests under the `tests/` directory."
+- "Run `pytest -q` after adding tests."
+
+**JS/TS / Vitest:**
+- Include phrases like: "This is for the TypeScript frontend. Use Vitest via npm."
+- "Run `npm test` or `npx vitest run` after adding tests."
 
 ### Understanding Subagent Turns
 

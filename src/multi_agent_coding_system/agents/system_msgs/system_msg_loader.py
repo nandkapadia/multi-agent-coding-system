@@ -6,6 +6,8 @@ LATEST_SYSTEM_MSGS = {
     "orchestrator": "orchestrator_sys_msg.md",
     "explorer": "explorer_sys_msg.md",
     "coder": "coder_sys_msg.md",
+    "code_reviewer": "code_reviewer_sys_msg.md",
+    "test_writer": "test_writer_sys_msg.md",
 }
 
 cwd = os.getcwd()
@@ -38,3 +40,11 @@ def load_explorer_system_message(depth: int) -> str:
 
 def load_coder_system_message(depth: int) -> str:
     return _load_system_message("coder")
+
+
+def load_code_reviewer_system_message(depth: int) -> str:
+    return _load_system_message("code_reviewer")
+
+
+def load_test_writer_system_message(depth: int) -> str:
+    return _load_system_message("test_writer")

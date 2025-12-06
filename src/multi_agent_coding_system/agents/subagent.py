@@ -19,7 +19,13 @@ from multi_agent_coding_system.agents.actions.entities.subagent_report import Co
 from multi_agent_coding_system.agents.env_interaction.turn_executor import TurnExecutor
 from multi_agent_coding_system.agents.env_interaction.env_info_retriever import EnvInfoRetriever
 from multi_agent_coding_system.agents.utils.llm_client import count_input_tokens, count_output_tokens, get_llm_response
-from multi_agent_coding_system.agents.system_msgs.system_msg_loader import load_coder_system_message, load_explorer_system_message
+from multi_agent_coding_system.agents.system_msgs.system_msg_loader import (
+    load_coder_system_message,
+    load_explorer_system_message,
+    load_code_reviewer_system_message,
+    load_test_writer_system_message,
+)
+from multi_agent_coding_system.config.model_config import get_model_for_agent_type
 
 
 logger = logging.getLogger(__name__)
@@ -89,8 +95,13 @@ class Subagent:
         # Using ~4 chars per token heuristic: 3k tokens ≈ 12k chars
         self.max_env_response_chars = int(os.getenv("ORCA_MAX_ENV_RESPONSE_CHARS", "12000"))
 
-        # Store LLM configuration
-        self.model = model or os.getenv("ORCA_SUBAGENT_MODEL") or os.getenv("LITELLM_MODEL")
+        # Store LLM configuration (priority: explicit arg > agent-specific env > generic subagent env > fallback)
+        self.model = (
+            model
+            or get_model_for_agent_type(task.agent_type)
+            or os.getenv("ORCA_SUBAGENT_MODEL")
+            or os.getenv("LITELLM_MODEL")
+        )
         self.api_key = api_key or os.getenv("ORCA_SUBAGENT_API_KEY") or os.getenv("LITE_LLM_API_KEY")
         self.api_base = api_base or os.getenv("ORCA_SUBAGENT_API_BASE") or os.getenv("LITE_LLM_API_BASE")
         self.temperature = temperature or float(os.getenv("ORCA_SUBAGENT_TEMPERATURE", "0.1"))
@@ -105,7 +116,8 @@ class Subagent:
             orchestrator_hub=orchestrator_hub,  # Pass the shared orchestrator hub
             logging_dir=logging_dir,
             depth=self.depth,  # Pass depth for recursion control
-            parent_agent_id=self.agent_id
+            parent_agent_id=self.agent_id,
+            agent_type=self.task.agent_type,  # Pass agent type for permission checking
         )
         
         self.turn_exec = TurnExecutor(
@@ -123,10 +135,16 @@ class Subagent:
     def _load_system_message(self) -> str:
         if self.task.agent_type == "explorer":
             return load_explorer_system_message(depth=self.depth)
-        
+
         if self.task.agent_type == "coder":
             return load_coder_system_message(depth=self.depth)
-        
+
+        if self.task.agent_type == "code_reviewer":
+            return load_code_reviewer_system_message(depth=self.depth)
+
+        if self.task.agent_type == "test_writer":
+            return load_test_writer_system_message(depth=self.depth)
+
         raise ValueError(f"Unknown agent type: {self.task.agent_type}")
         
     def _build_task_prompt(self) -> str:
