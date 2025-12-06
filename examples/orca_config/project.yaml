@@ -1,0 +1,44 @@
+# .orca/project.yaml - Project configuration for multi-agent system
+#
+# This file provides metadata about your project that helps agents
+# understand the codebase structure and conventions.
+
+name: "Trading System"
+description: |
+  Algorithmic trading platform with strategy backtesting, live execution,
+  and real-time market data processing. Uses a mixin-based architecture
+  for composable strategy components.
+
+tech_stack:
+  - Python 3.12
+  - pandas / numpy for data processing
+  - asyncio for concurrent execution
+  - PostgreSQL for trade history
+  - Redis for real-time state
+  - FastAPI for REST API
+
+entry_points:
+  - src/main.py           # Main application entry
+  - src/backtest/run.py   # Backtesting runner
+  - src/live/runner.py    # Live trading runner
+
+# Key directories for agents to understand
+directories:
+  strategies: src/strategies/      # Strategy implementations
+  mixins: src/mixins/              # Reusable strategy components
+  data: src/data/                  # Market data handling
+  execution: src/execution/        # Order execution
+  risk: src/risk/                  # Risk management
+
+# Testing configuration
+testing:
+  framework: pytest
+  test_dir: tests/
+  run_command: "pytest -q"
+  coverage_command: "coverage run -m pytest && coverage report"
+
+# Coding conventions
+conventions:
+  style: "black + isort + ruff"
+  typing: "strict (mypy)"
+  docstrings: "Google style"
