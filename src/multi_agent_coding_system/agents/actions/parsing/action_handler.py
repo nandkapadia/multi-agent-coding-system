@@ -33,6 +33,7 @@ from multi_agent_coding_system.agents.actions.entities.actions import (
 from multi_agent_coding_system.agents.actions.state_managers import TodoManager, ScratchpadManager
 from multi_agent_coding_system.agents.actions.file_manager import FileManager
 from multi_agent_coding_system.agents.actions.search_manager import SearchManager
+from multi_agent_coding_system.agents.actions.permissions import is_action_allowed_for_agent, get_blocked_action_message
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +74,10 @@ class ActionHandler:
         max_rollout_time: Optional[float] = None,
         rollout_start_time: Optional[float] = None,
         verbose_outputs: bool = False,
+        agent_type: Optional[str] = None,
     ):
         self.executor = executor
+        self.agent_type = agent_type  # For permission checking
 
         self.todo_manager = todo_manager or TodoManager()
         self.scratchpad_manager = scratchpad_manager or ScratchpadManager()
@@ -127,11 +130,23 @@ class ActionHandler:
         }
     
     async def handle_action(self, action: Action) -> Tuple[str, bool]:
-        """Handle an action and return (response, is_error)."""
+        """Handle an action and return (response, is_error).
+
+        Validates action permissions before execution for read-only agents.
+        """
+        action_type_name = type(action).__name__
+
+        # Check permissions if agent_type is set (subagents)
+        if self.agent_type is not None:
+            if not is_action_allowed_for_agent(self.agent_type, action_type_name):
+                error_msg = get_blocked_action_message(self.agent_type, action_type_name)
+                logger.warning(f"Permission denied: {error_msg}")
+                return format_tool_output("permission", error_msg), True
+
         handler = self._handlers.get(type(action))
         if handler:
             return await handler(action)
-        content = f"[ERROR] Unknown action type: {type(action).__name__}"
+        content = f"[ERROR] Unknown action type: {action_type_name}"
         return format_tool_output("unknown", content), True
 
     def _check_sufficient_time_for_subagent(self, min_seconds: float = 30.0) -> Tuple[bool, float]:

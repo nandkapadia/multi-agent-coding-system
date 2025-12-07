@@ -22,7 +22,7 @@ class ContextBootstrapItem:
 class Task:
     """Represents a task to be executed by a subagent."""
     task_id: str
-    agent_type: Literal['explorer', 'coder']
+    agent_type: Literal['explorer', 'coder', 'code_reviewer', 'test_writer']
     title: str
     description: str
     max_turns: int

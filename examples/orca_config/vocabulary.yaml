@@ -1,0 +1,77 @@
+# .orca/vocabulary.yaml - Domain-specific terms and their meanings
+#
+# This helps agents understand domain-specific terminology used in your codebase.
+# When agents see these terms in task descriptions or code, they'll know what they mean.
+
+SignalMixin:
+  definition: |
+    A mixin class that generates trading signals (BUY, SELL, HOLD) based on
+    market data. SignalMixins are composable components that can be combined
+    to create complex trading strategies.
+  examples:
+    - "MomentumSignalMixin - generates signals based on price momentum"
+    - "MeanReversionSignalMixin - signals when price deviates from moving average"
+    - "VolumeSignalMixin - incorporates volume analysis into signals"
+  see_also:
+    - FeatureMixin
+    - Strategy
+
+FeatureMixin:
+  definition: |
+    A mixin class that computes derived features from raw market data.
+    Features are used by SignalMixins to make trading decisions. FeatureMixins
+    handle the data transformation and ensure proper time-series alignment.
+  examples:
+    - "RSIFeatureMixin - computes Relative Strength Index"
+    - "BollingerFeatureMixin - computes Bollinger Bands"
+    - "VWAPFeatureMixin - computes Volume Weighted Average Price"
+  see_also:
+    - SignalMixin
+    - DataPipeline
+
+Strategy:
+  definition: |
+    A complete trading strategy composed of one or more SignalMixins and
+    FeatureMixins. Strategies inherit from BaseStrategy and combine mixins
+    to define entry/exit logic.
+  examples:
+    - "class MomentumStrategy(BaseStrategy, MomentumSignalMixin, RSIFeatureMixin)"
+
+DataPipeline:
+  definition: |
+    The system for loading, cleaning, and transforming market data. Handles
+    multiple data sources, missing data, and ensures consistent timestamps.
+
+Position:
+  definition: |
+    A current holding in a security. Tracks quantity, entry price, P&L, and
+    associated orders.
+
+Order:
+  definition: |
+    A request to buy or sell a security. Can be market, limit, or stop orders.
+    Orders flow through the OrderManager to the broker.
+
+Backtest:
+  definition: |
+    Historical simulation of a strategy's performance. Uses past market data
+    to evaluate strategy returns, drawdown, and risk metrics.
+
+LiveRunner:
+  definition: |
+    The system that executes strategies in real-time with live market data
+    and real broker connections.
+
+RiskManager:
+  definition: |
+    Component that enforces position limits, stop-losses, and other risk
+    constraints. Can veto or modify orders before execution.
+
+lookahead_bias:
+  definition: |
+    A bug where future data is accidentally used to make decisions about the
+    past. Common in backtesting when features use data that wouldn't have
+    been available at execution time.
+  examples:
+    - "Using tomorrow's close to make today's trading decision"
+    - "Fitting parameters on the full dataset including test period"
