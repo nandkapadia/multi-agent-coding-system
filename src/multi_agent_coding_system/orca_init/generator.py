@@ -347,3 +347,26 @@ def write_config(config: GeneratedConfig, output_dir: str) -> List[str]:
             created_files.append(str(pattern_path))
 
     return created_files
+
+
+def generate_orca_config(
+    output_dir: str,
+    analysis: CodebaseAnalysis,
+    detection: PatternDetectionResult,
+    user_inputs: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """Generate and write .orca/ configuration in one step.
+
+    This is a convenience function that combines generate_config() and write_config().
+
+    Args:
+        output_dir: Path to project root where .orca/ will be created
+        analysis: Codebase structure analysis
+        detection: Pattern detection results
+        user_inputs: Optional user-provided refinements
+
+    Returns:
+        List of created file paths
+    """
+    config = generate_config(analysis, detection, user_inputs)
+    return write_config(config, output_dir)

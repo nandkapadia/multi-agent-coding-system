@@ -157,7 +157,7 @@ def run_non_interactive(
     if verbose:
         print_info("Detecting patterns and vocabulary...")
 
-    detection = detect_patterns(str(project_path), analysis)
+    detection = detect_patterns(str(project_path), analysis.languages)
 
     if verbose:
         print(f"  - Patterns found: {len(detection.patterns)}")
@@ -219,7 +219,7 @@ def run_interactive(
 
     # Phase 2: Detect patterns
     print_info("Detecting patterns and conventions...")
-    detection = detect_patterns(str(project_path), analysis)
+    detection = detect_patterns(str(project_path), analysis.languages)
 
     # Phase 3: Interactive refinement
     try:
