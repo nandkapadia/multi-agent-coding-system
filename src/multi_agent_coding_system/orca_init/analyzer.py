@@ -156,8 +156,8 @@ def analyze_codebase(root_path: str) -> CodebaseAnalysis:
             try:
                 with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                     total_lines += sum(1 for _ in f)
-            except:
-                pass
+            except (OSError, IOError):
+                pass  # Skip files we can't read
 
         total_files += 1
 
@@ -263,8 +263,8 @@ def _detect_frameworks(root: Path, analysis: CodebaseAnalysis):
                 frameworks.add("Vitest")
             if "jest" in deps:
                 frameworks.add("Jest")
-        except:
-            pass
+        except (OSError, IOError, json.JSONDecodeError, KeyError):
+            pass  # Skip if package.json is unreadable or malformed
 
     # Check pyproject.toml for specific packages
     pyproject = root / "pyproject.toml"
@@ -283,8 +283,8 @@ def _detect_frameworks(root: Path, analysis: CodebaseAnalysis):
                 frameworks.add("pandas")
             if "numpy" in content.lower():
                 frameworks.add("NumPy")
-        except:
-            pass
+        except (OSError, IOError):
+            pass  # Skip if pyproject.toml is unreadable
 
     analysis.frameworks = sorted(frameworks)
 
@@ -309,14 +309,40 @@ def _find_directories(root: Path, analysis: CodebaseAnalysis):
             analysis.source_directories.append(item.name)
 
 
-def _contains_code(directory: Path) -> bool:
-    """Check if a directory contains code files."""
+def _contains_code(directory: Path, max_depth: int = 10, _visited: set = None) -> bool:
+    """Check if a directory contains code files.
+
+    Args:
+        directory: Directory to check
+        max_depth: Maximum recursion depth to prevent stack overflow
+        _visited: Internal set of visited directories (for circular symlink detection)
+
+    Returns:
+        True if directory contains code files, False otherwise
+    """
+    # Prevent infinite recursion
+    if max_depth <= 0:
+        return False
+
+    # Initialize visited set on first call
+    if _visited is None:
+        _visited = set()
+
+    # Handle circular symlinks by tracking resolved paths
+    try:
+        real_path = directory.resolve()
+        if real_path in _visited:
+            return False  # Circular symlink detected
+        _visited.add(real_path)
+    except (OSError, RuntimeError):
+        return False  # Can't resolve path
+
     try:
         for item in directory.iterdir():
             if item.is_file() and item.suffix in LANGUAGE_EXTENSIONS:
                 return True
             if item.is_dir() and item.name not in IGNORE_DIRS:
-                if _contains_code(item):
+                if _contains_code(item, max_depth - 1, _visited):
                     return True
     except PermissionError:
         pass

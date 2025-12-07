@@ -14,8 +14,12 @@ Environment Variables:
 """
 
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
+
+# Lock for thread-safe singleton initialization
+_model_config_lock = threading.Lock()
 
 
 @dataclass
@@ -79,12 +83,17 @@ _model_config: Optional[ModelConfig] = None
 def get_model_config() -> ModelConfig:
     """Get the global model configuration instance.
 
+    Thread-safe singleton pattern with double-checked locking.
+
     Returns:
         The ModelConfig singleton instance
     """
     global _model_config
     if _model_config is None:
-        _model_config = ModelConfig()
+        with _model_config_lock:
+            # Double-check after acquiring lock
+            if _model_config is None:
+                _model_config = ModelConfig()
     return _model_config
 
 
@@ -103,11 +112,12 @@ def get_model_for_agent_type(agent_type: str) -> Optional[str]:
 def reload_model_config() -> ModelConfig:
     """Reload the model configuration from environment variables.
 
-    Useful for testing or when environment variables change.
+    Thread-safe. Useful for testing or when environment variables change.
 
     Returns:
         The newly loaded ModelConfig instance
     """
     global _model_config
-    _model_config = ModelConfig()
+    with _model_config_lock:
+        _model_config = ModelConfig()
     return _model_config
