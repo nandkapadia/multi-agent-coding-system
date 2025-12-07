@@ -246,6 +246,146 @@ After a Code Review task finishes, you should often:
 
 This ensures a virtuous cycle: **Coder -> Reviewer -> Tester -> (back to Coder if tests fail)**
 
+### Iterative Review-Fix Cycle
+
+The `code_reviewer` agent returns findings with **severity levels**. Use these to gate whether code needs to loop back to the coder:
+
+#### Severity Levels
+
+| Severity | Description | Action Required |
+|----------|-------------|-----------------|
+| `critical` | Security vulnerabilities, data loss risks, crashes | **MUST fix** - Loop back to coder |
+| `high` | Correctness bugs, race conditions, resource leaks | **MUST fix** - Loop back to coder |
+| `medium` | Performance issues, error handling gaps, code smells | **SHOULD fix** - Loop back if time permits |
+| `low` | Style issues, minor improvements, documentation | **MAY fix** - Optional, note for future |
+
+#### Review Gate Logic
+
+After `code_reviewer` completes, check the `review_summary` context:
+
+```
+IF review has critical OR high severity issues:
+    → Create new coder task to fix issues
+    → Pass `high_priority_issues` context to coder
+    → After coder fixes, run code_reviewer again
+    → Repeat until no critical/high issues remain
+
+ELSE IF review has only medium/low issues:
+    → Review passed - proceed to test_writer
+    → Optionally note medium issues for future improvement
+
+ELSE (no issues):
+    → Review passed - proceed to test_writer
+```
+
+#### Example: Iterative Fix Loop
+
+**First Review Finds Issues:**
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Review order validation changes'
+description: |
+  Review the new order validation logic in src/orders/validation.py.
+  Focus on correctness, edge cases, and security.
+max_turns: 12
+context_refs:
+  - 'implementation_task_001'
+context_bootstrap:
+  - path: 'src/orders/validation.py'
+    reason: 'New code to review'
+</task_create>
+```
+
+**Reviewer Returns Issues → Loop Back to Coder:**
+```
+<task_create>
+agent_type: 'coder'
+title: 'Fix validation issues from review'
+description: |
+  Address the following issues identified in code review:
+
+  **Critical Issues (MUST FIX):**
+  1. SQL injection vulnerability in order lookup (line 45)
+  2. Missing null check causes crash on empty orders (line 72)
+
+  **High Issues (MUST FIX):**
+  3. Race condition in concurrent order updates (line 88-95)
+
+  Fix each issue and ensure the fixes don't introduce regressions.
+max_turns: 15
+context_refs:
+  - 'high_priority_issues'
+  - 'review_summary'
+context_bootstrap:
+  - path: 'src/orders/validation.py'
+    reason: 'File with issues to fix'
+</task_create>
+```
+
+**Re-Review After Fixes:**
+```
+<task_create>
+agent_type: 'code_reviewer'
+title: 'Re-review validation after fixes'
+description: |
+  Re-review src/orders/validation.py after fixes were applied.
+
+  Previous issues that should now be resolved:
+  - SQL injection vulnerability (line 45)
+  - Missing null check (line 72)
+  - Race condition (line 88-95)
+
+  Verify fixes are correct and check for any new issues introduced.
+max_turns: 10
+context_refs:
+  - 'fix_task_002'
+  - 'previous_review_summary'
+context_bootstrap:
+  - path: 'src/orders/validation.py'
+    reason: 'Fixed file to re-review'
+</task_create>
+```
+
+**Review Passes → Proceed to Testing:**
+```
+<task_create>
+agent_type: 'test_writer'
+title: 'Add tests for order validation'
+description: |
+  Create comprehensive tests for the order validation logic.
+
+  Cover the following areas flagged by code review:
+  - Input sanitization (SQL injection prevention)
+  - Null/empty order handling
+  - Concurrent update scenarios
+
+  Use pytest. Run tests after creation.
+max_turns: 15
+context_refs:
+  - 'final_review_summary'
+  - 'implementation_context'
+context_bootstrap:
+  - path: 'src/orders/validation.py'
+    reason: 'Code to test'
+  - path: 'tests/orders/'
+    reason: 'Existing test patterns'
+</task_create>
+```
+
+#### Maximum Iterations
+
+To prevent infinite loops, set a maximum of **3 review iterations**:
+
+1. **Iteration 1**: Initial review after implementation
+2. **Iteration 2**: Re-review after first round of fixes
+3. **Iteration 3**: Final review - if issues remain, document them and proceed
+
+If critical issues persist after 3 iterations, escalate by:
+- Adding a detailed `unresolved_issues` context
+- Proceeding to testing to capture issues as failing tests
+- Flagging in the final report that manual review is recommended
+
 ### Stack-Specific Task Hints
 
 When creating test-generation tasks, include stack hints in the description:

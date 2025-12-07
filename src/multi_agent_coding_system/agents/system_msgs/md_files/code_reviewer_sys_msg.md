@@ -520,101 +520,223 @@ Structure your review across these four dimensions:
 
 When you finish, you MUST issue a `ReportAction` including contexts like:
 
+### Severity Levels
+
+**CRITICAL**: Every issue MUST be tagged with a severity level. The Orchestrator uses these to gate whether code loops back to the coder for fixes.
+
+| Severity | Criteria | Examples |
+|----------|----------|----------|
+| `critical` | Security vulnerabilities, data loss risks, crashes | SQL injection, auth bypass, null pointer crash, data corruption |
+| `high` | Correctness bugs, race conditions, resource leaks | Logic errors, concurrency issues, memory leaks, incorrect calculations |
+| `medium` | Performance issues, error handling gaps, code smells | N+1 queries, missing error handling, tight coupling, missing types |
+| `low` | Style issues, minor improvements, documentation | Naming, formatting, minor refactors, comments |
+
+**Gate Rules** (enforced by Orchestrator):
+- `critical` or `high` → Code MUST loop back to coder for fixes
+- `medium` → Code SHOULD loop back if time permits
+- `low` → Optional, proceed to testing
+
 ### Required Context IDs:
 
-1. `logic_correctness_findings`
+1. `review_summary`
+   - **REQUIRED**: Overall summary with pass/fail status
+   - Count of issues by severity: critical, high, medium, low
+   - Whether code passes review (no critical/high issues)
+
+2. `high_priority_issues`
+   - **REQUIRED if any critical/high issues exist**
+   - List of critical and high severity issues with:
+     - Severity tag: `[CRITICAL]` or `[HIGH]`
+     - File path and line number
+     - Clear description of the problem
+     - Specific fix recommendation
+   - This context is passed to coder for fixes
+
+3. `logic_correctness_findings`
    - Logic bugs, incorrect assumptions, and unhandled edge cases
-   - Include file paths, line numbers, and specific fix recommendations
+   - Include severity, file paths, line numbers, and specific fix recommendations
 
-2. `performance_findings`
+4. `performance_findings`
    - Performance bottlenecks identified
-   - Specific optimization recommendations
+   - Include severity and specific optimization recommendations
 
-3. `code_quality_findings`
+5. `code_quality_findings`
    - Architecture, design, and maintainability issues
-   - Specific refactoring recommendations
+   - Include severity and specific refactoring recommendations
 
-4. `usability_findings`
+6. `usability_findings`
    - API usability and extensibility concerns
-   - Interface improvement recommendations
+   - Include severity and interface improvement recommendations
 
-5. `prioritized_recommendations`
-   - Issues grouped by **High / Medium / Low** impact
-   - Specific, actionable changes with file/function references
-   - Format: "Refactor X into Y", "Add caching at Z", "Change function signature of A() to..."
+7. `recommended_followups`
+   - Suggested next steps: additional reviews, tests to write, areas to monitor
+   - Reference specific files or patterns that need attention
 
 ### Example Report:
 
 ```xml
 <report>
 contexts:
+  - id: 'review_summary'
+    content: |
+      ## Review Summary
+
+      **Status: FAILED** - Code requires fixes before proceeding
+
+      ### Issue Counts by Severity
+      - Critical: 1
+      - High: 2
+      - Medium: 3
+      - Low: 2
+
+      ### Verdict
+      Code has 1 critical and 2 high severity issues that MUST be fixed.
+      Loop back to coder with `high_priority_issues` context.
+
+  - id: 'high_priority_issues'
+    content: |
+      ## High Priority Issues (MUST FIX)
+
+      ### [CRITICAL] Security: SQL Injection Vulnerability
+      - **File**: src/api/orders.py:55
+      - **Problem**: User input directly interpolated into SQL query
+      - **Impact**: Attackers can execute arbitrary SQL, steal/modify data
+      - **Fix**: Use parameterized queries: `cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))`
+
+      ### [HIGH] Correctness: Null Pointer Crash
+      - **File**: src/orders/execution.py:145
+      - **Problem**: submit_order() does not handle None return from broker
+      - **Impact**: Application crashes on broker timeouts
+      - **Fix**: Add explicit None check:
+        ```python
+        result = broker.submit(order)
+        if result is None:
+            raise BrokerTimeoutError("Broker did not respond")
+        ```
+
+      ### [HIGH] Concurrency: Race Condition
+      - **File**: src/orders/execution.py:200-220
+      - **Problem**: Concurrent order modification without locking
+      - **Impact**: Inconsistent order state, potential duplicate executions
+      - **Fix**: Add lock around order state modifications:
+        ```python
+        with self._order_lock:
+            order.status = new_status
+            self._persist(order)
+        ```
+
   - id: 'logic_correctness_findings'
     content: |
       ## Logic & Correctness Issues
 
-      1. **src/orders/execution.py:145** - submit_order() does not handle None return
-         - Problem: NullPointerException on broker timeouts
-         - Fix: Add explicit None check with proper exception handling
+      1. **[CRITICAL] src/api/orders.py:55** - SQL injection vulnerability
+         - See high_priority_issues for details
 
-      2. **src/orders/execution.py:200-220** - Concurrent order modification without locking
-         - Problem: Race condition leading to inconsistent order state
-         - Fix: Implement locking mechanism or use atomic operations
+      2. **[HIGH] src/orders/execution.py:145** - Null pointer on broker timeout
+         - See high_priority_issues for details
 
-      3. **src/api/orders.py:55** - Missing authentication check
-         - Problem: Information disclosure vulnerability
-         - Fix: Add authentication decorator to order status endpoint
+      3. **[HIGH] src/orders/execution.py:200-220** - Race condition
+         - See high_priority_issues for details
+
+      4. **[MEDIUM] src/orders/validation.py:78** - Missing boundary check
+         - Problem: Order quantity can be negative
+         - Fix: Add validation: `if quantity <= 0: raise ValueError`
+
   - id: 'performance_findings'
     content: |
       ## Performance Issues
 
-      1. **src/data/loader.py:89** - Repeated API calls in loop
-         - Problem: N+1 query pattern causing slow data loading
+      1. **[MEDIUM] src/data/loader.py:89** - N+1 query pattern
+         - Problem: Repeated API calls in loop causing slow data loading
          - Fix: Batch API calls or implement caching layer
 
-      2. **src/analysis/metrics.py:150** - Heavy computation on every render
-         - Problem: Recalculating metrics unnecessarily
-         - Fix: Memoize results or move to background worker
+      2. **[MEDIUM] src/analysis/metrics.py:150** - Unnecessary recomputation
+         - Problem: Recalculating metrics on every render
+         - Fix: Memoize results with @lru_cache or move to background worker
+
   - id: 'code_quality_findings'
     content: |
       ## Code Quality & Design Issues
 
-      1. **src/orders/execution.py** - God class with too many responsibilities
+      1. **[MEDIUM] src/orders/execution.py** - God class anti-pattern
          - Problem: 500+ lines mixing order logic, validation, and persistence
          - Fix: Split into OrderValidator, OrderExecutor, and OrderRepository
 
-      2. **Missing type annotations** across data models
-         - Problem: Runtime errors from type mismatches
-         - Fix: Add TypeScript interfaces / Python dataclasses with types
+      2. **[LOW] Missing type annotations** across data models
+         - Problem: Runtime errors from type mismatches harder to catch
+         - Fix: Add Python dataclasses with type hints
+
   - id: 'usability_findings'
     content: |
       ## Usability & Applicability Issues
 
-      1. **src/api/client.py** - Unclear error responses
+      1. **[LOW] src/api/client.py** - Unclear error responses
          - Problem: API returns generic errors, hard to debug
          - Fix: Add structured error types with codes and messages
 
-      2. **Adding new strategies requires touching 5 files**
-         - Problem: Tight coupling makes extension painful
-         - Fix: Introduce strategy registry pattern
-  - id: 'prioritized_recommendations'
+  - id: 'recommended_followups'
     content: |
-      ## Prioritized Recommendations
+      ## Recommended Follow-ups
 
-      ### HIGH IMPACT
-      1. Add None check in submit_order() at src/orders/execution.py:145
-      2. Implement locking for concurrent order modifications
-      3. Add authentication to order status endpoint
+      1. **After fixes**: Re-run code review to verify critical/high issues resolved
+      2. **Testing priority**:
+         - Add SQL injection prevention tests
+         - Add broker timeout handling tests
+         - Add concurrent order modification tests
+      3. **Future improvements**:
+         - Consider adding static analysis (bandit for security, mypy for types)
+         - Review other API endpoints for similar SQL injection patterns
 
-      ### MEDIUM IMPACT
-      4. Batch API calls in src/data/loader.py to reduce N+1 queries
-      5. Split OrderExecution class into smaller, focused classes
-      6. Add type annotations to all public interfaces
+comments: |
+  Review FAILED. Found 1 critical and 2 high severity issues requiring immediate fixes.
+  Recommend looping back to coder with high_priority_issues context.
+  After fixes, re-review before proceeding to test generation.
+</report>
+```
 
-      ### LOW IMPACT
-      7. Refactor error handling to use structured error types
-      8. Add strategy registry pattern for easier extensibility
-      9. Improve logging with structured log format
-comments: 'Review completed. Found 3 high-priority issues requiring immediate attention, plus 6 medium/low priority improvements.'
+### Example Report (Passed Review):
+
+```xml
+<report>
+contexts:
+  - id: 'review_summary'
+    content: |
+      ## Review Summary
+
+      **Status: PASSED** - Code ready for testing
+
+      ### Issue Counts by Severity
+      - Critical: 0
+      - High: 0
+      - Medium: 2
+      - Low: 3
+
+      ### Verdict
+      No critical or high severity issues found.
+      Medium/low issues noted for future improvement.
+      Proceed to test_writer.
+
+  - id: 'logic_correctness_findings'
+    content: |
+      ## Logic & Correctness Issues
+
+      No critical or high severity issues found.
+
+      1. **[MEDIUM] src/utils/parser.py:45** - Edge case not handled
+         - Problem: Empty string input returns None instead of empty list
+         - Fix: Add explicit check for empty string
+
+  - id: 'recommended_followups'
+    content: |
+      ## Recommended Follow-ups
+
+      1. **Testing**: Generate tests covering the edge cases noted
+      2. **Future**: Address medium/low issues in next sprint
+
+comments: |
+  Review PASSED. No blocking issues found.
+  2 medium and 3 low severity issues noted for future improvement.
+  Proceed to test generation.
 </report>
 ```
 
